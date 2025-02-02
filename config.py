@@ -1,7 +1,14 @@
 # config.py
 
-# 股票代號（006208 為預設值），Yahoo Finance 台股需加上 .TW 後綴
-STOCK_CODE = "006208.TW"
+## 定義要監控的股票/ETF，每個項目包含 Yahoo Finance 的代碼與顯示名稱
+STOCKS = [
+    {"code": "006208.TW", "name": "006208"},
+    {"code": "0050.TW", "name": "0050"},
+    {"code": "VT",       "name": "VT"},
+    {"code": "%5EGSPC",  "name": "S&P500"},
+    {"code": "IEF",      "name": "IEF"},
+    {"code": "BND",      "name": "BND"}
+]
 
 # 當日價格相較前3個月平均降幅門檻 (%)，例如 0.05 表示低於三個月平均收盤價 5% 則符合加碼條件
 THRESHOLD_PERCENT = 0.05

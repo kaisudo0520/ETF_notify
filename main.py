@@ -1,9 +1,12 @@
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
-from config import STOCK_CODE, THRESHOLD_PERCENT, TEST_DATE
+from config import STOCKS, THRESHOLD_PERCENT, TEST_DATE
 from data_fetch import fetch_stock_data, get_today_stock_price
 from analysis import compute_three_month_average, decide_action
 from storage import store_excel_result
+from notify import send_telegram_message
 
 def get_previous_three_month_date_range(reference_date):
     """
@@ -29,40 +32,57 @@ def get_previous_three_month_date_range(reference_date):
     return start_date.isoformat(), end_date.isoformat()
 
 def main():
-    # 使用回測設定的 TEST_DATE，若為 None 則採用今日日期作為參考日期
-    if TEST_DATE:
-        reference_date = datetime.strptime(TEST_DATE, "%Y-%m-%d").date()
-    else:
-        reference_date = date.today()
+    # 直接採用今日日期作為參考日期
+    reference_date = date.today()
 
     # 取得前3個完整月份的日期區間 (ISO 格式字串)
     start_date, end_date = get_previous_three_month_date_range(reference_date)
     
-    # 爬取前3個月每日收盤價資料
-    df_three_month = fetch_stock_data(STOCK_CODE, start_date, end_date)
+    results = []  # 用以儲存各股票結果
     
-    # 計算前3個月市場均價
-    three_month_avg = compute_three_month_average(df_three_month)
+    # 逐一監測每個股票 / ETF (使用 STOCKS 清單)
+    for stock in STOCKS:
+        code = stock["code"]
+        name = stock["name"]
+
+        # 爬取前3個月每日收盤價資料
+        df_three_month = fetch_stock_data(code, start_date, end_date)
+        
+        # 計算前3個月市場均價
+        three_month_avg = compute_three_month_average(df_three_month)
+        
+        # 取得當日價格（若當日無資料，可能需要使用最近交易日價格）
+        today_price = get_today_stock_price(code)
+        
+        # 判斷是否符合加碼條件（以前3個月均價作為比較基準）
+        action = decide_action(today_price, three_month_avg, THRESHOLD_PERCENT)
+        
+        # 價格取到小數後2位
+        today_price_fmt = f"{today_price:.2f}"
+        three_month_avg_fmt = f"{three_month_avg:.2f}"
+
+        print(f"{name} 今日價格: {today_price_fmt}")
+        print(f"{name} 前3個月平均收盤價: {three_month_avg_fmt}")
+        print(f"{name} 建議: {action}")
+        print("-" * 40)
+        
+        # 若符合買進訊號則發送 Telegram 通知
+        if action == "加碼":
+            message = f"{name} 買進通知\n今日價格: {today_price_fmt}\n前三月均價: {three_month_avg_fmt}"
+            send_telegram_message(message)
+        
+        result = {
+            "stock_name": name,
+            "stock_code": code,
+            "date": datetime.today().strftime("%Y-%m-%d"),
+            "today_price": today_price_fmt,
+            "three_month_avg": three_month_avg_fmt,
+            "action": action
+        }
+        results.append(result)
     
-    # 取得當日價格（若當日無資料，可能需要使用最近交易日價格）
-    today_price = get_today_stock_price(STOCK_CODE)
-    
-    # 判斷是否符合加碼條件（以前3個月均價作為比較基準）
-    action = decide_action(today_price, three_month_avg, THRESHOLD_PERCENT)
-    
-    print(f"今日價格: {today_price}")
-    print(f"前3個月平均收盤價: {three_month_avg}")
-    print(f"建議: {action}")
-    
-    # 儲存結果至 Excel
-    result = {
-        "date": datetime.today().strftime("%Y-%m-%d"),
-        "today_price": today_price,
-        "three_month_avg": three_month_avg,
-        "action": action
-    }
-    
-    store_excel_result(result)
+    # 儲存所有股票的結果至 Excel
+    store_excel_result(results)
 
 if __name__ == "__main__":
     main() 
