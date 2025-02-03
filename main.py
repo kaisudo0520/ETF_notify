@@ -41,10 +41,7 @@ def main():
     results = []  # 用以儲存各股票結果
     
     # 逐一監測每個股票 / ETF (使用 STOCKS 清單)
-    for stock in STOCKS:
-        code = stock["code"]
-        name = stock["name"]
-
+    for name, code in STOCKS.items():
         # 爬取前3個月每日收盤價資料
         df_three_month = fetch_stock_data(code, start_date, end_date)
         
@@ -60,15 +57,22 @@ def main():
         # 價格取到小數後2位
         today_price_fmt = f"{today_price:.2f}"
         three_month_avg_fmt = f"{three_month_avg:.2f}"
+        
+        # 計算當日價格與三個月均價的變化百分比
+        if three_month_avg != 0:
+            pct_diff = ((today_price - three_month_avg) / three_month_avg) * 100
+        else:
+            pct_diff = 0
+        pct_diff_fmt = f"{pct_diff:+.2f}%"
 
         print(f"{name} 今日價格: {today_price_fmt}")
         print(f"{name} 前3個月平均收盤價: {three_month_avg_fmt}")
-        print(f"{name} 建議: {action}")
+        print(f"{name} 建議: {action} ({pct_diff_fmt})")
         print("-" * 40)
         
         # 若符合買進訊號則發送 Telegram 通知
         if action == "加碼":
-            message = f"{name} 買進通知\n今日價格: {today_price_fmt}\n前三月均價: {three_month_avg_fmt}"
+            message = f"{name} 買進通知\n今日價格: {today_price_fmt}\n前三月均價: {three_month_avg_fmt}\n建議: {action} ({pct_diff_fmt})"
             send_telegram_message(message)
         
         result = {
