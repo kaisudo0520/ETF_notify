@@ -2,11 +2,13 @@ from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
-from config import STOCKS, THRESHOLD_PERCENT, TEST_DATE
+from config import STOCKS, THRESHOLD_PERCENT, TEST_DATE, DATABASE_FILE
 from data_fetch import fetch_stock_data, get_today_stock_price
 from analysis import compute_three_month_average, decide_action
-from storage import store_excel_result
 from notify import send_telegram_message
+import schedule
+import time
+import storage  # 導入 storage 模組
 
 def get_previous_three_month_date_range(reference_date):
     """
@@ -31,7 +33,7 @@ def get_previous_three_month_date_range(reference_date):
     start_date = first_day_last_complete_month - relativedelta(months=2)
     return start_date.isoformat(), end_date.isoformat()
 
-def main():
+def job():
     # 直接採用今日日期作為參考日期
     reference_date = date.today()
 
@@ -39,7 +41,7 @@ def main():
     start_date, end_date = get_previous_three_month_date_range(reference_date)
     
     results = []  # 用以儲存各股票結果
-    
+
     # 逐一監測每個股票 / ETF (使用 STOCKS 清單)
     for name, code in STOCKS.items():
         # 爬取前3個月每日收盤價資料
@@ -71,22 +73,32 @@ def main():
         print("-" * 40)
         
         # 若符合買進訊號則發送 Telegram 通知
-        if action == "加碼":
+        if action == "買進":
             message = f"{name} 買進通知\n今日價格: {today_price_fmt}\n前三月均價: {three_month_avg_fmt}\n建議: {action} ({pct_diff_fmt})"
             send_telegram_message(message)
         
         result = {
             "stock_name": name,
-            "stock_code": code,
+            "stock_code": code.replace(".TW", ""),  # 移除 .TW
             "date": datetime.today().strftime("%Y-%m-%d"),
             "today_price": today_price_fmt,
             "three_month_avg": three_month_avg_fmt,
             "action": action
         }
         results.append(result)
-    
-    # 儲存所有股票的結果至 Excel
-    store_excel_result(results)
+        # 儲存每一筆資料
+        storage.store_result(result)
+
+# 設定每天早上 9:00 執行 job 函數 (您可以自行調整時間)
+schedule.every().day.at("09:00").do(job)
 
 if __name__ == "__main__":
-    main() 
+    # 建立資料庫表格 (只需執行一次)
+    storage.create_table()
+
+    # 初始執行一次
+    job()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)  # 每 60 秒檢查一次是否有排程任務需要執行 

@@ -1,6 +1,6 @@
 @echo off
 
 REM 執行主程式
-python main.py
+python N:\projects\ETF_notify\main.py
 
 pause 

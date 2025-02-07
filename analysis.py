@@ -21,6 +21,6 @@ def decide_action(today_price, monthly_avg, threshold_percent):
     if today_price is None or monthly_avg is None:
         return "資料不足"
     if today_price < monthly_avg * (1 - threshold_percent):
-        return "加碼"
+        return "買進"
     else:
-        return "維持定期定額" 
+        return "觀察" 
