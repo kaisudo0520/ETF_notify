@@ -55,6 +55,9 @@ Thumbs.db
 # Excel result file (產生的檔案)
 stock_results.xlsx 
 
+# SQLite database file (新增)
+stock_results.db
+
 # Environment variables
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
