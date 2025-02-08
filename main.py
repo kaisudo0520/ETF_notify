@@ -34,48 +34,40 @@ def get_previous_three_month_date_range(reference_date):
     return start_date.isoformat(), end_date.isoformat()
 
 def job():
-    # 直接採用今日日期作為參考日期
+    # 使用今日作為參考日期
     reference_date = date.today()
-
-    # 取得前3個完整月份的日期區間 (ISO 格式字串)
     start_date, end_date = get_previous_three_month_date_range(reference_date)
     
-    results = []  # 用以儲存各股票結果
-
-    # 逐一監測每個股票 / ETF (使用 STOCKS 清單)
+    results = []  # 儲存各股票結果（如欲後續使用）
+    
+    # 組合通知訊息
+    message_report = f"股票監測報告 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    message_report += "========================================\n\n"
+    
+    # 逐一監測每個股票/ETF (依據 STOCKS 清單)
     for name, code in STOCKS.items():
         # 爬取前3個月每日收盤價資料
         df_three_month = fetch_stock_data(code, start_date, end_date)
         
-        # 計算前3個月市場均價
+        # 計算前三個月市場均價
         three_month_avg = compute_three_month_average(df_three_month)
         
-        # 取得當日價格（若當日無資料，可能需要使用最近交易日價格）
+        # 取得當日收盤價 (如無資料則使用最近交易日價格)
         today_price = get_today_stock_price(code)
         
-        # 判斷是否符合加碼條件（以前3個月均價作為比較基準）
+        # 判斷是否符合加碼條件（以前三個月均價作為基準）
         action = decide_action(today_price, three_month_avg, THRESHOLD_PERCENT)
         
-        # 價格取到小數後2位
+        # 格式化價格 (保留小數點後2位)
         today_price_fmt = f"{today_price:.2f}"
         three_month_avg_fmt = f"{three_month_avg:.2f}"
         
-        # 計算當日價格與三個月均價的變化百分比
+        # 計算價格變化百分比
         if three_month_avg != 0:
             pct_diff = ((today_price - three_month_avg) / three_month_avg) * 100
         else:
             pct_diff = 0
         pct_diff_fmt = f"{pct_diff:+.2f}%"
-
-        print(f"{name} 今日價格: {today_price_fmt}")
-        print(f"{name} 前3個月平均收盤價: {three_month_avg_fmt}")
-        print(f"{name} 建議: {action} ({pct_diff_fmt})")
-        print("-" * 40)
-        
-        # 若符合買進訊號則發送 Telegram 通知
-        if action == "買進":
-            message = f"{name} 買進通知\n今日價格: {today_price_fmt}\n前三月均價: {three_month_avg_fmt}\n建議: {action} ({pct_diff_fmt})"
-            send_telegram_message(message)
         
         result = {
             "stock_name": name,
@@ -86,14 +78,29 @@ def job():
             "action": action
         }
         results.append(result)
-        # 儲存每一筆資料
+        
+        # 將結果存入資料庫
         storage.store_result(result)
+        
+        # 加入當前股票訊息區塊
+        message_report += f"股票名稱: {name}\n"
+        message_report += f"股票代碼: {code.replace('.TW', '')}\n"
+        message_report += f"今日價格: {today_price_fmt}\n"
+        message_report += f"前三月均價: {three_month_avg_fmt}\n"
+        message_report += f"價格變化: {pct_diff_fmt}\n"
+        message_report += f"建議: {action}\n"
+        message_report += "----------------------------------------\n"
+    
+    # 以 Telegram 傳送整體報告
+    send_telegram_message(message_report)
+    print(message_report)
 
-# 設定每天早上 9:00 執行 job 函數 (您可以自行調整時間)
-schedule.every().day.at("09:00").do(job)
+# 設定每日09:10與21:10執行 job 函數
+schedule.every().day.at("09:10").do(job)
+schedule.every().day.at("21:10").do(job)
 
 if __name__ == "__main__":
-    # 建立資料庫表格 (只需執行一次)
+    # 建立資料庫表格 (只需第一次執行)
     storage.create_table()
 
     # 初始執行一次
@@ -101,4 +108,4 @@ if __name__ == "__main__":
 
     while True:
         schedule.run_pending()
-        time.sleep(60)  # 每 60 秒檢查一次是否有排程任務需要執行 
+        time.sleep(60)  # 每60秒檢查一次是否有排程任務需要執行 
